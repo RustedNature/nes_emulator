@@ -37,6 +37,9 @@ impl CPU {
                 0x00 => {
                     break;
                 }
+                0xE8 => {
+                    self.inx();
+                }
                 _ => todo!(),
             }
         }
@@ -67,6 +70,17 @@ impl CPU {
             self.status &= 0b0111_1111;
         }
     }
+
+    fn inx(&mut self) {
+        if self.register_x == 0xff{
+          self.register_x = 0x00;   
+        }
+        else {
+            self.register_x += 1;
+        }
+        
+        self.update_zero_and_negative_flag(self.register_x);
+    }
     
 }
 
@@ -79,8 +93,8 @@ mod test {
         let mut cpu = CPU::new();
         cpu.interpret(vec![0xa9, 0x05, 0x00]);
         assert_eq!(cpu.register_a, 0x05);
-        assert!(cpu.status & 0b0000_0010 == 0b00,"Die Zero-Flag ist nicht korrekt gesetzt");
-        assert!(cpu.status & 0b1000_0000 == 0, "Die Negative-Flag ist nicht korrekt gesetzt.");
+        assert!(cpu.status & 0b0000_0010 == 0b00);
+        assert!(cpu.status & 0b1000_0000 == 0);
         
     }#[test]
     fn test_0xa9_lad_zero_flag() {
@@ -96,4 +110,20 @@ mod test {
  
        assert_eq!(cpu.register_x, 10)
    }
+   #[test]
+   fn test_5_ops_working_together() {
+       let mut cpu = CPU::new();
+       cpu.interpret(vec![0xa9, 0xc0, 0xaa, 0xe8, 0x00]);
+ 
+       assert_eq!(cpu.register_x, 0xc1)
+   }
+
+    #[test]
+    fn test_inx_overflow() {
+        let mut cpu = CPU::new();
+        cpu.register_x = 0xff;
+        cpu.interpret(vec![0xe8, 0xe8, 0x00]);
+
+        assert_eq!(cpu.register_x, 1)
+    }
 }
