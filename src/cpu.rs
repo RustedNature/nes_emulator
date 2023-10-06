@@ -2,6 +2,8 @@ use super::opcode::*;
 
 const ZERO_RESULT: u8 = 0b0000_0000;
 const NEGATIVE_RESULT: u8 = 0b1000_0000;
+pub const ZERO_FLAG: u8 = 0b0000_0010;
+pub const NEGATIVE_FLAG: u8 = 0b1000_0000;
 
 #[derive(Debug, Clone)]
 pub enum AddressingMode {
@@ -22,7 +24,7 @@ pub enum AddressingMode {
 }
 
 pub struct CPU {
-    pub register_a: u8,
+    pub accumulator: u8,
     pub register_x: u8,
     pub register_y: u8,
     pub status: u8,
@@ -34,7 +36,7 @@ pub struct CPU {
 impl CPU {
     pub fn new() -> CPU {
         CPU {
-            register_a: 0x00,
+            accumulator: 0x00,
             register_x: 0x00,
             register_y: 0x00,
             status: 0b0000_0000,
@@ -52,7 +54,7 @@ impl CPU {
         self.memory[address as usize]
     }
     pub fn reset(&mut self) {
-        self.register_a = 0;
+        self.accumulator = 0;
         self.register_x = 0;
         self.register_y = 0;
         self.status = 0;
@@ -131,8 +133,8 @@ impl CPU {
                 let addr = self.mem_read(((self.program_counter as i16) + offset) as u16);
                 addr as u16 //TODO: TESTING
             }
-            AddressingMode::Implied => todo!(),
-            AddressingMode::Indirect => todo!(),
+            AddressingMode::Implied => { todo!() }
+            AddressingMode::Indirect => self.mem_read_u16(self.program_counter), //TODO: TESTING
             _ => {
                 panic!("mode {:?} is not supported", mode);
             }
@@ -158,7 +160,8 @@ impl CPU {
                 }
                 //AND
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {
-                    todo!();
+                    self.and(opcode.get_addressing_mode());
+                    self.program_counter += (opcode.get_bytes() - 1) as u16;
                 }
                 //ASL
                 0x0a | 0x06 | 0x16 | 0x0e | 0x1e => {
@@ -390,22 +393,23 @@ impl CPU {
         let address = self.get_operand_address(addressing_mode);
         let memory_value = self.mem_read(address);
 
-        self.register_a += memory_value;
+        self.accumulator += memory_value;
+        self.update_zero_and_negative_flag(self.accumulator);
     }
 
     pub(crate) fn lda(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_operand_address(addressing_mode);
         let value = self.mem_read(address);
 
-        self.register_a = value;
-        self.update_zero_and_negative_flag(self.register_a);
+        self.accumulator = value;
+        self.update_zero_and_negative_flag(self.accumulator);
     }
     pub(crate) fn sta(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_operand_address(addressing_mode);
-        self.mem_write(address, self.register_a);
+        self.mem_write(address, self.accumulator);
     }
     pub(crate) fn tax(&mut self) {
-        self.register_x = self.register_a;
+        self.register_x = self.accumulator;
         self.update_zero_and_negative_flag(self.register_x);
     }
     pub(crate) fn inx(&mut self, addressing_mode: &AddressingMode) {
@@ -425,7 +429,7 @@ impl CPU {
             self.reset_zero_flag();
         }
 
-        if (self.register_x & NEGATIVE_RESULT) != 0 {
+        if (result_of_last_operation & NEGATIVE_RESULT) != 0 {
             self.set_negative_flag();
         } else {
             self.reset_negative_flag();
@@ -444,6 +448,11 @@ impl CPU {
     }
     fn reset_zero_flag(&mut self) {
         self.status &= 0b1111_1101;
+    }
+
+    fn and(&mut self, addressing_mode: &AddressingMode) {
+        self.accumulator &= self.mem_read(self.get_operand_address(addressing_mode));
+        self.update_zero_and_negative_flag(self.accumulator);
     }
 }
 
