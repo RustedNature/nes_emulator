@@ -134,13 +134,17 @@ impl CPU {
                 let deref = deref_base.wrapping_add(self.register_y as u16);
                 deref
             }
-            AddressingMode::Accumulator => { todo!() }
+            AddressingMode::Accumulator => {
+                todo!()
+            }
             AddressingMode::Relative => {
                 let offset = self.mem_read(self.program_counter) as i16;
                 let addr = self.mem_read(((self.program_counter as i16) + offset) as u16);
                 addr as u16 //TODO: TESTING
             }
-            AddressingMode::Implied => { todo!() }
+            AddressingMode::Implied => {
+                todo!()
+            }
             AddressingMode::Indirect => self.mem_read_u16(self.program_counter), //TODO: TESTING
             _ => {
                 panic!("mode {:?} is not supported", mode);
@@ -154,8 +158,10 @@ impl CPU {
                 Some(vale) => {
                     opcode = vale;
                 }
-                None =>
-                    panic!("opcode with code {:X} not found", self.mem_read(self.program_counter)),
+                None => panic!(
+                    "opcode with code {:X} not found",
+                    self.mem_read(self.program_counter)
+                ),
             }
             self.program_counter += 1;
 
@@ -445,26 +451,29 @@ impl CPU {
         self.update_zero_and_negative_flag(self.register_x);
     }
     pub(crate) fn inx(&mut self, addressing_mode: &AddressingMode) {
-        if self.register_x == 0xff {
-            self.register_x = 0x00;
-        } else {
-            self.register_x += 1;
-        }
-
+        self.register_x = self.register_x.wrapping_add(1);
         self.update_zero_and_negative_flag(self.register_x);
     }
 
     pub(crate) fn update_zero_and_negative_flag(&mut self, result_of_last_operation: u8) {
-        if result_of_last_operation == ZERO_RESULT {
-            self.set_zero_flag();
-        } else {
-            self.reset_zero_flag();
-        }
+        self.update_zero_flag(result_of_last_operation);
 
+        self.update_negative_flag(result_of_last_operation);
+    }
+
+    fn update_negative_flag(&mut self, result_of_last_operation: u8) {
         if (result_of_last_operation & NEGATIVE_RESULT) != 0 {
             self.set_negative_flag();
         } else {
             self.reset_negative_flag();
+        }
+    }
+
+    fn update_zero_flag(&mut self, result_of_last_operation: u8) {
+        if result_of_last_operation == ZERO_RESULT {
+            self.set_zero_flag();
+        } else {
+            self.reset_zero_flag();
         }
     }
 
@@ -476,15 +485,18 @@ impl CPU {
     }
 
     fn set_zero_flag(&mut self) {
-        self.status |= 0b0000_0010;
+        self.status |= ZERO_FLAG;
     }
     fn reset_zero_flag(&mut self) {
-        self.status &= 0b1111_1101;
+        self.status &= !ZERO_FLAG;
     }
 
-    fn and(&mut self, addressing_mode: &AddressingMode) {
-        self.accumulator &= self.mem_read(self.get_operand_address(addressing_mode));
-        self.update_zero_and_negative_flag(self.accumulator);
+    fn set_carry_flag_to(&mut self, out_shifted_bit: u8) {
+        if out_shifted_bit == 0x1 {
+            self.status |= CARRY_FLAG;
+        } else {
+            self.status &= !CARRY_FLAG;
+        }
     }
 }
 
