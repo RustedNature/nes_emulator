@@ -23,4 +23,3 @@ fn test_lda_from_memory() {
 
     assert_eq!(cpu.accumulator, 0x55);
 }
-

@@ -2,7 +2,14 @@ use super::opcode::*;
 
 const ZERO_RESULT: u8 = 0b0000_0000;
 const NEGATIVE_RESULT: u8 = 0b1000_0000;
+
+pub const CARRY_FLAG: u8 = 0b0000_0001;
 pub const ZERO_FLAG: u8 = 0b0000_0010;
+pub const INTERRUPT_DISABLE_FLAG: u8 = 0b0000_0100;
+pub const DECIMAL_FLAG: u8 = 0b0000_1000; //not used in NES
+pub const B_FLAG: u8 = 0b0001_0000;
+pub const ALWAYS_1_FLAG: u8 = 0b0010_0000;
+pub const OVERFLOW_FLAG: u8 = 0b0100_0000;
 pub const NEGATIVE_FLAG: u8 = 0b1000_0000;
 
 #[derive(Debug, Clone)]
@@ -165,7 +172,8 @@ impl CPU {
                 }
                 //ASL
                 0x0a | 0x06 | 0x16 | 0x0e | 0x1e => {
-                    todo!();
+                    self.asl(opcode.get_addressing_mode());
+                    self.program_counter += (opcode.get_bytes() - 1) as u16;
                 }
                 //BCC
                 0x90 => {
@@ -397,6 +405,30 @@ impl CPU {
         self.update_zero_and_negative_flag(self.accumulator);
     }
 
+    fn and(&mut self, addressing_mode: &AddressingMode) {
+        self.accumulator &= self.mem_read(self.get_operand_address(addressing_mode));
+        self.update_zero_and_negative_flag(self.accumulator);
+    }
+
+    fn asl(&mut self, addressing_mode: &AddressingMode) {
+        let mut out_shifted_bit: u8 = 0;
+        match addressing_mode {
+            AddressingMode::Accumulator => {
+                out_shifted_bit >>= 7;
+                self.accumulator <<= 1;
+                self.update_zero_and_negative_flag(self.accumulator);
+            }
+            _ => {
+                let address = self.get_operand_address(addressing_mode);
+                let mut memory_content = self.mem_read(address);
+                out_shifted_bit >>= 7;
+                memory_content <<= 1;
+                self.mem_write(address, memory_content);
+                self.update_zero_and_negative_flag(memory_content);
+            }
+        }
+        self.set_carry_flag_to(out_shifted_bit);
+    }
     pub(crate) fn lda(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_operand_address(addressing_mode);
         let value = self.mem_read(address);
