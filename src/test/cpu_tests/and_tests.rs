@@ -29,4 +29,3 @@ fn test_zeropage_lda_zeropage_and_zeropage() {
     cpu.load_and_run(vec![0xa5, 0x55, 0x25, 0xff, 0x00]);
     assert_eq!(cpu.accumulator, 0b1001_1011);
 }
-

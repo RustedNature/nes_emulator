@@ -8,7 +8,7 @@ pub const ZERO_FLAG: u8 = 0b0000_0010;
 pub const INTERRUPT_DISABLE_FLAG: u8 = 0b0000_0100;
 pub const DECIMAL_FLAG: u8 = 0b0000_1000; //not used in NES
 pub const B_FLAG: u8 = 0b0001_0000;
-pub const ALWAYS_1_FLAG: u8 = 0b0010_0000;
+pub const ALWAYS_1_FLAG: u8 = 0b0010_0000; //always 1
 pub const OVERFLOW_FLAG: u8 = 0b0100_0000;
 pub const NEGATIVE_FLAG: u8 = 0b1000_0000;
 
@@ -36,7 +36,7 @@ pub struct CPU {
     pub register_y: u8,
     pub status: u8,
     pub program_counter: u16,
-    pub stack_pointer: u16,
+    pub stack_pointer: u8,
     pub memory: [u8; 0xffff],
 }
 
@@ -138,9 +138,9 @@ impl CPU {
                 todo!()
             }
             AddressingMode::Relative => {
-                let offset = self.mem_read(self.program_counter) as i16;
-                let addr = self.mem_read(((self.program_counter as i16) + offset) as u16);
-                addr as u16 //TODO: TESTING
+                let offset = self.mem_read(self.program_counter);
+                let addr = (self.program_counter as i16) + offset as i16;
+                addr as u16 //TODO: negative offset
             }
             AddressingMode::Implied => {
                 todo!()
@@ -169,21 +169,18 @@ impl CPU {
                 //ADC
                 0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71 => {
                     self.adc(opcode.get_addressing_mode());
-                    self.program_counter += (opcode.get_bytes() - 1) as u16;
                 }
                 //AND
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {
                     self.and(opcode.get_addressing_mode());
-                    self.program_counter += (opcode.get_bytes() - 1) as u16;
                 }
                 //ASL
                 0x0a | 0x06 | 0x16 | 0x0e | 0x1e => {
                     self.asl(opcode.get_addressing_mode());
-                    self.program_counter += (opcode.get_bytes() - 1) as u16;
                 }
                 //BCC
                 0x90 => {
-                    todo!();
+                    self.bcc(opcode.get_addressing_mode());
                 }
                 //BCS
                 0xb0 => {
@@ -271,7 +268,7 @@ impl CPU {
                 }
                 //INX
                 0xe8 => {
-                    self.inx(opcode.get_addressing_mode());
+                    self.inx();
                 }
                 //INY
                 0xc8 => {
@@ -400,6 +397,7 @@ impl CPU {
                     panic!("opcode {:X} not found", opcode.get_code());
                 }
             }
+            self.program_counter += (opcode.get_bytes() - 1) as u16;
         }
     }
 
@@ -409,25 +407,24 @@ impl CPU {
 
         self.accumulator += memory_value;
         self.update_zero_and_negative_flag(self.accumulator);
-    }
+    } //TODO: CARRY BIT
 
     fn and(&mut self, addressing_mode: &AddressingMode) {
         self.accumulator &= self.mem_read(self.get_operand_address(addressing_mode));
         self.update_zero_and_negative_flag(self.accumulator);
     }
-
     fn asl(&mut self, addressing_mode: &AddressingMode) {
         let mut out_shifted_bit: u8 = 0;
         match addressing_mode {
             AddressingMode::Accumulator => {
-                out_shifted_bit >>= 7;
+                out_shifted_bit = self.accumulator >> 7;
                 self.accumulator <<= 1;
                 self.update_zero_and_negative_flag(self.accumulator);
             }
             _ => {
                 let address = self.get_operand_address(addressing_mode);
                 let mut memory_content = self.mem_read(address);
-                out_shifted_bit >>= 7;
+                out_shifted_bit = memory_content >> 7;
                 memory_content <<= 1;
                 self.mem_write(address, memory_content);
                 self.update_zero_and_negative_flag(memory_content);
@@ -435,6 +432,30 @@ impl CPU {
         }
         self.set_carry_flag_to(out_shifted_bit);
     }
+    //TODO: TEST FROM HERE
+    fn bcc(&mut self, addressing_mode: &AddressingMode) {
+        if !self.is_carry_flag_set() {
+            self.program_counter = self.get_operand_address(addressing_mode);
+        }
+    }
+    fn bcs(&mut self, addressing_mode: &AddressingMode) {
+        if self.is_carry_flag_set() {
+            self.program_counter = self.get_operand_address(addressing_mode);
+        }
+    }
+    fn beq(&mut self, addressing_mode: &AddressingMode){
+        if self.is_zero_flag_set(){
+            self.program_counter = self.get_operand_address(addressing_mode);
+        }
+    }
+    fn bit(&mut self, addressing_mode: &AddressingMode){
+        let memory_value = self.mem_read(self.get_operand_address(addressing_mode));
+        let and_result = self.accumulator & memory_value;
+        self.update_zero_flag(and_result);
+        //TODO: FLAGS
+
+    }
+
     pub(crate) fn lda(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_operand_address(addressing_mode);
         let value = self.mem_read(address);
@@ -450,7 +471,7 @@ impl CPU {
         self.register_x = self.accumulator;
         self.update_zero_and_negative_flag(self.register_x);
     }
-    pub(crate) fn inx(&mut self, addressing_mode: &AddressingMode) {
+    pub(crate) fn inx(&mut self) {
         self.register_x = self.register_x.wrapping_add(1);
         self.update_zero_and_negative_flag(self.register_x);
     }
@@ -478,10 +499,10 @@ impl CPU {
     }
 
     fn set_negative_flag(&mut self) {
-        self.status |= 0b1000_0000;
+        self.status |= NEGATIVE_FLAG;
     }
     fn reset_negative_flag(&mut self) {
-        self.status &= 0b0111_1111;
+        self.status &= !NEGATIVE_FLAG;
     }
 
     fn set_zero_flag(&mut self) {
@@ -497,6 +518,10 @@ impl CPU {
         } else {
             self.status &= !CARRY_FLAG;
         }
+    }
+    fn is_carry_flag_set(&self) -> bool {
+        let carry_bit = self.status << 7;
+        carry_bit == 1
     }
 }
 
