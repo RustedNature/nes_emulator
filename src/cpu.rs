@@ -523,6 +523,10 @@ impl CPU {
         let carry_bit = self.status << 7;
         carry_bit == 1
     }
+    fn is_zero_flag_set(&self)-> bool{
+        let zero_bit = (self.status >> 1) << 7;
+        zero_bit == 1
+    }
 }
 
 impl Default for CPU {
