@@ -283,7 +283,7 @@ impl OpCode {
         code: u8,
         bytes: u8,
         cycles: u8,
-        addressing_mode: AddressingMode
+        addressing_mode: AddressingMode,
     ) -> Self {
         OpCode {
             instruction,
