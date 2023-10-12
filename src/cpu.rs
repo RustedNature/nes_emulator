@@ -131,8 +131,7 @@ impl CPU {
                 let lo = self.mem_read(base as u16);
                 let hi = self.mem_read(base.wrapping_add(1) as u16);
                 let deref_base = ((hi as u16) << 8) | (lo as u16);
-                let deref = deref_base.wrapping_add(self.register_y as u16);
-                deref
+                deref_base.wrapping_add(self.register_y as u16)
             }
             AddressingMode::Accumulator => {
                 todo!()
@@ -285,7 +284,7 @@ impl CPU {
                 //LDA
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
                     self.lda(opcode.get_addressing_mode());
-                    self.program_counter += (opcode.get_bytes() - 1) as u16;
+                    
                 }
                 //LDX
                 0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => {
@@ -358,7 +357,7 @@ impl CPU {
                 //STA
                 0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode.get_addressing_mode());
-                    self.program_counter += (opcode.get_bytes() - 1) as u16;
+                    
                 }
                 //STX
                 0x86 | 0x96 | 0x8e => {
@@ -371,7 +370,7 @@ impl CPU {
                 //TAX
                 0xaa => {
                     self.tax();
-                    self.program_counter += (opcode.get_bytes() - 1) as u16;
+                    
                 }
                 //TAY
                 0xa8 => {
