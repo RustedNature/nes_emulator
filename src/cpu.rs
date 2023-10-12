@@ -138,8 +138,16 @@ impl CPU {
             }
             AddressingMode::Relative => {
                 let offset = self.mem_read(self.program_counter);
-                let addr = (self.program_counter as i16) + offset as i16;
-                addr as u16 //TODO: negative offset
+                if offset >> 7 == 1{
+                    let address = (self.program_counter ) - (offset & 0b0111_1111) as u16 ;
+                    address
+                }
+                else {
+                    let address = self.program_counter + (offset & 0b0111_1111) as u16;
+                    address
+                }
+                
+                
             }
             AddressingMode::Implied => {
                 todo!()
@@ -284,7 +292,6 @@ impl CPU {
                 //LDA
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
                     self.lda(opcode.get_addressing_mode());
-                    
                 }
                 //LDX
                 0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => {
@@ -357,7 +364,6 @@ impl CPU {
                 //STA
                 0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => {
                     self.sta(opcode.get_addressing_mode());
-                    
                 }
                 //STX
                 0x86 | 0x96 | 0x8e => {
@@ -370,7 +376,6 @@ impl CPU {
                 //TAX
                 0xaa => {
                     self.tax();
-                    
                 }
                 //TAY
                 0xa8 => {
@@ -413,7 +418,7 @@ impl CPU {
         self.update_zero_and_negative_flag(self.accumulator);
     }
     fn asl(&mut self, addressing_mode: &AddressingMode) {
-        let mut out_shifted_bit: u8 = 0;
+        let mut out_shifted_bit: u8;
         match addressing_mode {
             AddressingMode::Accumulator => {
                 out_shifted_bit = self.accumulator >> 7;
@@ -442,17 +447,16 @@ impl CPU {
             self.program_counter = self.get_operand_address(addressing_mode);
         }
     }
-    fn beq(&mut self, addressing_mode: &AddressingMode){
-        if self.is_zero_flag_set(){
+    fn beq(&mut self, addressing_mode: &AddressingMode) {
+        if self.is_zero_flag_set() {
             self.program_counter = self.get_operand_address(addressing_mode);
         }
     }
-    fn bit(&mut self, addressing_mode: &AddressingMode){
+    fn bit(&mut self, addressing_mode: &AddressingMode) {
         let memory_value = self.mem_read(self.get_operand_address(addressing_mode));
         let and_result = self.accumulator & memory_value;
         self.update_zero_flag(and_result);
         //TODO: FLAGS
-
     }
 
     pub(crate) fn lda(&mut self, addressing_mode: &AddressingMode) {
@@ -462,14 +466,17 @@ impl CPU {
         self.accumulator = value;
         self.update_zero_and_negative_flag(self.accumulator);
     }
+
     pub(crate) fn sta(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_operand_address(addressing_mode);
         self.mem_write(address, self.accumulator);
     }
+
     pub(crate) fn tax(&mut self) {
         self.register_x = self.accumulator;
         self.update_zero_and_negative_flag(self.register_x);
     }
+
     pub(crate) fn inx(&mut self) {
         self.register_x = self.register_x.wrapping_add(1);
         self.update_zero_and_negative_flag(self.register_x);
@@ -522,7 +529,7 @@ impl CPU {
         let carry_bit = self.status << 7;
         carry_bit == 1
     }
-    fn is_zero_flag_set(&self)-> bool{
+    fn is_zero_flag_set(&self) -> bool {
         let zero_bit = (self.status >> 1) << 7;
         zero_bit == 1
     }
