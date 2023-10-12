@@ -138,16 +138,13 @@ impl CPU {
             }
             AddressingMode::Relative => {
                 let offset = self.mem_read(self.program_counter);
-                if offset >> 7 == 1{
-                    let address = (self.program_counter ) - (offset & 0b0111_1111) as u16 ;
+                if offset >> 7 == 1 {
+                    let address = self.program_counter - (offset & 0b0111_1111) as u16;
                     address
-                }
-                else {
+                } else {
                     let address = self.program_counter + (offset & 0b0111_1111) as u16;
                     address
                 }
-                
-                
             }
             AddressingMode::Implied => {
                 todo!()
