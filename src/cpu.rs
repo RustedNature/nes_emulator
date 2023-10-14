@@ -2,6 +2,9 @@ use super::opcode::*;
 
 const ZERO_RESULT: u8 = 0b0000_0000;
 const NEGATIVE_RESULT: u8 = 0b1000_0000;
+const STACK_START: u16 = 0x0100;
+const STACK_END: u16 = 0x01ff;
+const STACK_POINTER_START: u8 = 0xff;
 
 pub const CARRY_FLAG: u8 = 0b0000_0001;
 pub const ZERO_FLAG: u8 = 0b0000_0010;
@@ -52,12 +55,12 @@ impl CPU {
             memory: [0; 0xffff],
         }
     }
-    pub fn mem_read_u16(&self, address: u16) -> u16 {
-        let low = self.mem_read(address) as u16;
-        let hi = self.mem_read(address + 1) as u16;
+    pub fn memory_read_2_byte(&self, address: u16) -> u16 {
+        let low = self.memory_read_byte(address) as u16;
+        let hi = self.memory_read_byte(address + 1) as u16;
         (hi << 8) | low
     }
-    pub fn mem_read(&self, address: u16) -> u8 {
+    pub fn memory_read_byte(&self, address: u16) -> u8 {
         self.memory[address as usize]
     }
     pub fn reset(&mut self) {
@@ -65,71 +68,79 @@ impl CPU {
         self.register_x = 0;
         self.register_y = 0;
         self.status = 0;
-        self.program_counter = self.mem_read_u16(0xfffc);
+        self.stack_pointer = STACK_POINTER_START;
+        self.program_counter = self.memory_read_2_byte(0xfffc);
     }
     pub fn load(&mut self, program: Vec<u8>) {
         self.memory[0x8000..0x8000 + program.len()].copy_from_slice(&program[..]);
-        self.mem_write_u16(0xfffc, 0x8000);
+        self.memory_write_2_byte(0xfffc, 0x8000);
     }
-    pub(crate) fn mem_write_u16(&mut self, address: u16, data: u16) {
+    pub(crate) fn memory_write_2_byte(&mut self, address: u16, data: u16) {
         let hi = (data >> 8) as u8;
         let low = (data & 0xff) as u8;
-        self.mem_write(address, low);
-        self.mem_write(address + 1, hi);
+        self.memory_write_byte(address, low);
+        self.memory_write_byte(address + 1, hi);
     }
-    pub(crate) fn mem_write(&mut self, address: u16, data: u8) {
+    pub(crate) fn memory_write_byte(&mut self, address: u16, data: u8) {
         self.memory[address as usize] = data;
     }
-
+    fn push_byte_to_stack(&mut self, data: u8){
+        self.memory_write_byte(STACK_START + self.stack_pointer as u16, data);
+        self.stack_pointer -= 1;
+    }
+    fn pop_byte_from_stack(&mut self) -> u8{
+        self.stack_pointer += 1;
+        self.memory_read_byte(STACK_START + self.stack_pointer as u16)
+    }
     pub fn load_and_run(&mut self, program: Vec<u8>) {
         self.load(program);
         self.reset();
         self.run();
     }
 
-    pub(crate) fn get_operand_address(&self, mode: &AddressingMode) -> u16 {
+    pub(crate) fn get_address_for(&self, mode: &AddressingMode) -> u16 {
         match mode {
             AddressingMode::Immediate => self.program_counter,
 
-            AddressingMode::ZeroPage => self.mem_read(self.program_counter) as u16,
+            AddressingMode::ZeroPage => self.memory_read_byte(self.program_counter) as u16,
 
-            AddressingMode::Absolute => self.mem_read_u16(self.program_counter),
+            AddressingMode::Absolute => self.memory_read_2_byte(self.program_counter),
 
             AddressingMode::ZeroPageX => {
-                let pos = self.mem_read(self.program_counter);
-                let addr = pos.wrapping_add(self.register_x) as u16;
-                addr
+                let pos = self.memory_read_byte(self.program_counter);
+
+                pos.wrapping_add(self.register_x) as u16
             }
             AddressingMode::ZeroPageY => {
-                let pos = self.mem_read(self.program_counter);
-                let addr = pos.wrapping_add(self.register_y) as u16;
-                addr
+                let pos = self.memory_read_byte(self.program_counter);
+
+                pos.wrapping_add(self.register_y) as u16
             }
 
             AddressingMode::AbsoluteX => {
-                let base = self.mem_read_u16(self.program_counter);
-                let addr = base.wrapping_add(self.register_x as u16);
-                addr
+                let base = self.memory_read_2_byte(self.program_counter);
+
+                base.wrapping_add(self.register_x as u16)
             }
             AddressingMode::AbsoluteY => {
-                let base = self.mem_read_u16(self.program_counter);
-                let addr = base.wrapping_add(self.register_y as u16);
-                addr
+                let base = self.memory_read_2_byte(self.program_counter);
+
+                base.wrapping_add(self.register_y as u16)
             }
 
             AddressingMode::IndirectX => {
-                let base = self.mem_read(self.program_counter);
+                let base = self.memory_read_byte(self.program_counter);
 
                 let ptr: u8 = base.wrapping_add(self.register_x);
-                let lo = self.mem_read(ptr as u16);
-                let hi = self.mem_read(ptr.wrapping_add(1) as u16);
+                let lo = self.memory_read_byte(ptr as u16);
+                let hi = self.memory_read_byte(ptr.wrapping_add(1) as u16);
                 ((hi as u16) << 8) | (lo as u16)
             }
             AddressingMode::IndirectY => {
-                let base = self.mem_read(self.program_counter);
+                let base = self.memory_read_byte(self.program_counter);
 
-                let lo = self.mem_read(base as u16);
-                let hi = self.mem_read(base.wrapping_add(1) as u16);
+                let lo = self.memory_read_byte(base as u16);
+                let hi = self.memory_read_byte(base.wrapping_add(1) as u16);
                 let deref_base = ((hi as u16) << 8) | (lo as u16);
                 deref_base.wrapping_add(self.register_y as u16)
             }
@@ -137,19 +148,17 @@ impl CPU {
                 todo!()
             }
             AddressingMode::Relative => {
-                let offset = self.mem_read(self.program_counter);
-                if offset >> 7 == 1 {
-                    let address = self.program_counter - (offset & 0b0111_1111) as u16;
-                    address
+                let offset = self.memory_read_byte(self.program_counter);
+                if self.if_relative_offset_negative(offset) {
+                    self.program_counter - (offset & 0b0111_1111) as u16
                 } else {
-                    let address = self.program_counter + (offset & 0b0111_1111) as u16;
-                    address
+                    self.program_counter + (offset & 0b0111_1111) as u16
                 }
             }
             AddressingMode::Implied => {
                 todo!()
             }
-            AddressingMode::Indirect => self.mem_read_u16(self.program_counter), //TODO: TESTING
+            AddressingMode::Indirect => self.memory_read_2_byte(self.program_counter), //TODO: TESTING
             _ => {
                 panic!("mode {:?} is not supported", mode);
             }
@@ -158,13 +167,13 @@ impl CPU {
     pub fn run(&mut self) {
         let mut opcode: OpCode;
         loop {
-            match get_opcode_with_code(self.mem_read(self.program_counter)) {
+            match get_opcode_with_code(self.memory_read_byte(self.program_counter)) {
                 Some(vale) => {
                     opcode = vale;
                 }
                 None => panic!(
                     "opcode with code {:X} not found",
-                    self.mem_read(self.program_counter)
+                    self.memory_read_byte(self.program_counter)
                 ),
             }
             self.program_counter += 1;
@@ -401,15 +410,15 @@ impl CPU {
     }
 
     pub fn adc(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.get_operand_address(addressing_mode);
-        let memory_value = self.mem_read(address);
+        let address = self.get_address_for(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
 
         self.accumulator += memory_value;
         self.update_zero_and_negative_flag(self.accumulator);
     } //TODO: CARRY BIT
 
     fn and(&mut self, addressing_mode: &AddressingMode) {
-        self.accumulator &= self.mem_read(self.get_operand_address(addressing_mode));
+        self.accumulator &= self.memory_read_byte(self.get_address_for(addressing_mode));
         self.update_zero_and_negative_flag(self.accumulator);
     }
     fn asl(&mut self, addressing_mode: &AddressingMode) {
@@ -421,11 +430,11 @@ impl CPU {
                 self.update_zero_and_negative_flag(self.accumulator);
             }
             _ => {
-                let address = self.get_operand_address(addressing_mode);
-                let mut memory_content = self.mem_read(address);
+                let address = self.get_address_for(addressing_mode);
+                let mut memory_content = self.memory_read_byte(address);
                 out_shifted_bit = memory_content >> 7;
                 memory_content <<= 1;
-                self.mem_write(address, memory_content);
+                self.memory_write_byte(address, memory_content);
                 self.update_zero_and_negative_flag(memory_content);
             }
         }
@@ -434,67 +443,61 @@ impl CPU {
     //TODO: TEST FROM HERE
     fn bcc(&mut self, addressing_mode: &AddressingMode) {
         if !self.is_carry_flag_set() {
-            self.program_counter = self.get_operand_address(addressing_mode);
+            self.program_counter = self.get_address_for(addressing_mode);
         }
     }
     fn bcs(&mut self, addressing_mode: &AddressingMode) {
         if self.is_carry_flag_set() {
-            self.program_counter = self.get_operand_address(addressing_mode);
+            self.program_counter = self.get_address_for(addressing_mode);
         }
     }
     fn beq(&mut self, addressing_mode: &AddressingMode) {
         if self.is_zero_flag_set() {
-            self.program_counter = self.get_operand_address(addressing_mode);
+            self.program_counter = self.get_address_for(addressing_mode);
         }
     }
     fn bit(&mut self, addressing_mode: &AddressingMode) {
-        let memory_value = self.mem_read(self.get_operand_address(addressing_mode));
+        let memory_value = self.memory_read_byte(self.get_address_for(addressing_mode));
         let and_result = self.accumulator & memory_value;
         self.update_zero_flag(and_result);
-        //TODO: FLAGS
         let overflow_flag_from_memory = (memory_value << 1) >> 7;
         let negative_flag_from_memory = memory_value >> 7;
         self.set_negative_flag_to(negative_flag_from_memory);
         self.set_overflow_flag_to(overflow_flag_from_memory);
     }
-    fn bmi(&mut self, addressing_mode: &AddressingMode){
-        if self.is_negative_flag_set(){
-            let new_program_counter_address = self.get_operand_address(addressing_mode);
+    fn bmi(&mut self, addressing_mode: &AddressingMode) {
+        if self.is_negative_flag_set() {
+            let new_program_counter_address = self.get_address_for(addressing_mode);
             self.program_counter = new_program_counter_address;
         }
     }
-    fn bne(&mut self, addressing_mode: &AddressingMode){
-        if !self.is_zero_flag_set(){
-            let new_program_counter_address = self.get_operand_address(addressing_mode);
+    fn bne(&mut self, addressing_mode: &AddressingMode) {
+        if !self.is_zero_flag_set() {
+            let new_program_counter_address = self.get_address_for(addressing_mode);
             self.program_counter = new_program_counter_address;
         }
     }
-    /// Branch if Positive (BPL)
-    /// 
-    /// If the negative flag is not set, add the relative displacement to the program counter to cause a branch to a new location.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `addressing_mode` - The addressing mode used to get the operand for the instruction.
-    fn bpl(&mut self, addressing_mode: &AddressingMode){
-        if !self.is_negative_flag_set(){
-            let new_program_counter_address = self.get_operand_address(addressing_mode);
+    fn bpl(&mut self, addressing_mode: &AddressingMode) {
+        if !self.is_negative_flag_set() {
+            let new_program_counter_address = self.get_address_for(addressing_mode);
             self.program_counter = new_program_counter_address;
         }
     }
-    
+    fn brk(&mut self, addressing_mode: &AddressingMode) {
+        todo!();
+    }
 
     pub(crate) fn lda(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.get_operand_address(addressing_mode);
-        let value = self.mem_read(address);
+        let address = self.get_address_for(addressing_mode);
+        let value = self.memory_read_byte(address);
 
         self.accumulator = value;
         self.update_zero_and_negative_flag(self.accumulator);
     }
 
     pub(crate) fn sta(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.get_operand_address(addressing_mode);
-        self.mem_write(address, self.accumulator);
+        let address = self.get_address_for(addressing_mode);
+        self.memory_write_byte(address, self.accumulator);
     }
 
     pub(crate) fn tax(&mut self) {
@@ -573,9 +576,12 @@ impl CPU {
         let zero_bit = (self.status >> 1) << 7;
         zero_bit == 1
     }
-    fn is_negative_flag_set(&self) ->bool{
+    fn is_negative_flag_set(&self) -> bool {
         let negative_bit = self.status >> 7;
         negative_bit == 1
+    }
+    fn if_relative_offset_negative(&self, offset: u8) -> bool {
+        offset >> 7 == 1
     }
 }
 
