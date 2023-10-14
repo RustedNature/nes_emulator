@@ -188,16 +188,14 @@ impl CPU {
                 }
                 //BCS
                 0xb0 => {
-                    todo!();
+                    self.bcs(opcode.get_addressing_mode());
                 }
                 //BEQ
                 0xf0 => {
-                    todo!();
+                    self.beq(opcode.get_addressing_mode());
                 }
                 //BIT
-                0x24 | 0x2c => {
-                    todo!();
-                }
+                0x24 | 0x2c => self.bit(opcode.get_addressing_mode()),
                 //BMI
                 0x30 => {
                     todo!();
@@ -415,7 +413,7 @@ impl CPU {
         self.update_zero_and_negative_flag(self.accumulator);
     }
     fn asl(&mut self, addressing_mode: &AddressingMode) {
-        let mut out_shifted_bit: u8;
+        let out_shifted_bit: u8;
         match addressing_mode {
             AddressingMode::Accumulator => {
                 out_shifted_bit = self.accumulator >> 7;
@@ -454,7 +452,37 @@ impl CPU {
         let and_result = self.accumulator & memory_value;
         self.update_zero_flag(and_result);
         //TODO: FLAGS
+        let overflow_flag_from_memory = (memory_value << 1) >> 7;
+        let negative_flag_from_memory = memory_value >> 7;
+        self.set_negative_flag_to(negative_flag_from_memory);
+        self.set_overflow_flag_to(overflow_flag_from_memory);
     }
+    fn bmi(&mut self, addressing_mode: &AddressingMode){
+        if self.is_negative_flag_set(){
+            let new_program_counter_address = self.get_operand_address(addressing_mode);
+            self.program_counter = new_program_counter_address;
+        }
+    }
+    fn bne(&mut self, addressing_mode: &AddressingMode){
+        if !self.is_zero_flag_set(){
+            let new_program_counter_address = self.get_operand_address(addressing_mode);
+            self.program_counter = new_program_counter_address;
+        }
+    }
+    /// Branch if Positive (BPL)
+    /// 
+    /// If the negative flag is not set, add the relative displacement to the program counter to cause a branch to a new location.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `addressing_mode` - The addressing mode used to get the operand for the instruction.
+    fn bpl(&mut self, addressing_mode: &AddressingMode){
+        if !self.is_negative_flag_set(){
+            let new_program_counter_address = self.get_operand_address(addressing_mode);
+            self.program_counter = new_program_counter_address;
+        }
+    }
+    
 
     pub(crate) fn lda(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_operand_address(addressing_mode);
@@ -485,16 +513,16 @@ impl CPU {
         self.update_negative_flag(result_of_last_operation);
     }
 
-    fn update_negative_flag(&mut self, result_of_last_operation: u8) {
-        if (result_of_last_operation & NEGATIVE_RESULT) != 0 {
+    fn update_negative_flag(&mut self, byte_to_check: u8) {
+        if (byte_to_check & NEGATIVE_RESULT) != 0 {
             self.set_negative_flag();
         } else {
             self.reset_negative_flag();
         }
     }
 
-    fn update_zero_flag(&mut self, result_of_last_operation: u8) {
-        if result_of_last_operation == ZERO_RESULT {
+    fn update_zero_flag(&mut self, byte_to_check: u8) {
+        if byte_to_check == ZERO_RESULT {
             self.set_zero_flag();
         } else {
             self.reset_zero_flag();
@@ -522,6 +550,21 @@ impl CPU {
             self.status &= !CARRY_FLAG;
         }
     }
+
+    fn set_overflow_flag_to(&mut self, isolated_overflow_bit: u8) {
+        if isolated_overflow_bit == 0x1 {
+            self.status |= OVERFLOW_FLAG;
+        } else {
+            self.status &= !OVERFLOW_FLAG;
+        }
+    }
+    fn set_negative_flag_to(&mut self, isolated_negative_bit: u8) {
+        if isolated_negative_bit == 0x1 {
+            self.status |= NEGATIVE_FLAG;
+        } else {
+            self.status &= !NEGATIVE_FLAG;
+        }
+    }
     fn is_carry_flag_set(&self) -> bool {
         let carry_bit = self.status << 7;
         carry_bit == 1
@@ -529,6 +572,10 @@ impl CPU {
     fn is_zero_flag_set(&self) -> bool {
         let zero_bit = (self.status >> 1) << 7;
         zero_bit == 1
+    }
+    fn is_negative_flag_set(&self) ->bool{
+        let negative_bit = self.status >> 7;
+        negative_bit == 1
     }
 }
 
