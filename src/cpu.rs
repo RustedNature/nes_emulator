@@ -85,21 +85,21 @@ impl CPU {
     pub(crate) fn memory_write_byte(&mut self, address: u16, data: u8) {
         self.memory[address as usize] = data;
     }
-    fn push_byte_to_stack(&mut self, data: u8){
+    fn push_byte_to_stack(&mut self, data: u8) {
         self.memory_write_byte(STACK_START + self.stack_pointer as u16, data);
         self.stack_pointer -= 1;
     }
-    fn push_2_byte_to_stack(&mut self, data: u16){
+    fn push_2_byte_to_stack(&mut self, data: u16) {
         let hi = (data >> 8) as u8;
         let low = (data & 0xff) as u8;
         self.push_byte_to_stack(hi);
         self.push_byte_to_stack(low);
     }
-    fn pop_byte_from_stack(&mut self) -> u8{
+    fn pop_byte_from_stack(&mut self) -> u8 {
         self.stack_pointer += 1;
         self.memory_read_byte(STACK_START + self.stack_pointer as u16)
     }
-    fn pop_2_byte_from_stack(&mut self) -> u16{
+    fn pop_2_byte_from_stack(&mut self) -> u16 {
         let low = self.pop_byte_from_stack();
         let hi = self.pop_byte_from_stack();
         ((hi as u16) << 8) | (low as u16)
@@ -110,7 +110,7 @@ impl CPU {
         self.run();
     }
 
-     fn get_address_from(&self, mode: &AddressingMode) -> u16 {
+    fn get_address_from(&self, mode: &AddressingMode) -> u16 {
         match mode {
             AddressingMode::Immediate => self.program_counter,
 
@@ -156,9 +156,7 @@ impl CPU {
                 let deref_base = ((hi as u16) << 8) | (lo as u16);
                 deref_base.wrapping_add(self.register_y as u16)
             }
-            AddressingMode::Accumulator => {
-                todo!()
-            }
+            
             AddressingMode::Relative => {
                 let offset = self.memory_read_byte(self.program_counter);
                 if self.is_negativ_bit_present(offset) {
@@ -167,10 +165,8 @@ impl CPU {
                     self.program_counter + (offset & 0b0111_1111) as u16
                 }
             }
-            AddressingMode::Implied => {
-                todo!()
-            }
-            AddressingMode::Indirect => self.memory_read_2_byte(self.program_counter), //TODO: TESTING
+            
+            AddressingMode::Indirect => self.memory_read_2_byte(self.program_counter), 
             _ => {
                 panic!("mode {:?} is not supported", mode);
             }
@@ -218,9 +214,7 @@ impl CPU {
                 //BIT
                 0x24 | 0x2c => self.bit(opcode.get_addressing_mode()),
                 //BMI
-                0x30 => {
-                    self.bmi(opcode.get_addressing_mode())
-                }
+                0x30 => self.bmi(opcode.get_addressing_mode()),
                 //BNE
                 0xd0 => {
                     self.bne(opcode.get_addressing_mode());
@@ -231,7 +225,8 @@ impl CPU {
                 }
                 //BRK
                 0x00 => {
-                    self.brk(opcode.get_addressing_mode());
+                    //FIXME//self.brk(opcode.get_addressing_mode());
+                    break;
                 }
                 //BVC
                 0x50 => {
@@ -262,13 +257,9 @@ impl CPU {
                     self.cmp(opcode.get_addressing_mode());
                 }
                 //CPX
-                0xe0 | 0xe4 | 0xec => {
-                    self.cpx(opcode.get_addressing_mode())
-                }
+                0xe0 | 0xe4 | 0xec => self.cpx(opcode.get_addressing_mode()),
                 //CPY
-                0xc0 | 0xc4 | 0xcc => {
-                    self.cpy(opcode.get_addressing_mode())
-                }
+                0xc0 | 0xc4 | 0xcc => self.cpy(opcode.get_addressing_mode()),
                 //DEC
                 0xc6 | 0xd6 | 0xce | 0xde => {
                     self.dec(opcode.get_addressing_mode());
@@ -283,11 +274,11 @@ impl CPU {
                 }
                 //EOR
                 0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => {
-                    todo!();
+                    self.eor(opcode.get_addressing_mode());
                 }
                 //INC
                 0xe6 | 0xf6 | 0xee | 0xfe => {
-                    todo!();
+                    self.inc(opcode.get_addressing_mode());
                 }
                 //INX
                 0xe8 => {
@@ -295,15 +286,15 @@ impl CPU {
                 }
                 //INY
                 0xc8 => {
-                    todo!();
+                    self.iny();
                 }
                 //JMP
                 0x4c | 0x6c => {
-                    todo!();
+                    self.jmp(opcode.get_addressing_mode());
                 }
                 //JSR
                 0x20 => {
-                    todo!();
+                    self.jsr(opcode.get_addressing_mode());
                 }
                 //LDA
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
@@ -311,71 +302,71 @@ impl CPU {
                 }
                 //LDX
                 0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => {
-                    todo!();
+                    self.ldx(opcode.get_addressing_mode());
                 }
                 //LDY
                 0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => {
-                    todo!();
+                    self.ldy(opcode.get_addressing_mode());
                 }
                 //LSR
                 0x4a | 0x46 | 0x56 | 0x4e | 0x5e => {
-                    todo!();
+                    self.lsr(opcode.get_addressing_mode());
                 }
                 //NOP
                 0xea => {
-                    todo!();
+                    self.nop();
                 }
                 //ORA
                 0x09 | 0x05 | 0x15 | 0x0d | 0x1d | 0x19 | 0x01 | 0x11 => {
-                    todo!();
+                    self.ora(opcode.get_addressing_mode());
                 }
                 //PHA
                 0x48 => {
-                    todo!();
+                    self.pha();
                 }
                 //PHP
                 0x08 => {
-                    todo!();
+                    self.php();
                 }
                 //PLA
                 0x68 => {
-                    todo!();
+                    self.pla();
                 }
                 //PLP
                 0x28 => {
-                    todo!();
+                    self.plp();
                 }
                 //ROL
                 0x2a | 0x26 | 0x36 | 0x2e | 0x3e => {
-                    todo!();
+                    self.rol(opcode.get_addressing_mode());
                 }
                 //ROR
                 0x6a | 0x66 | 0x76 | 0x6e | 0x7e => {
-                    todo!();
+                    self.ror(opcode.get_addressing_mode());
                 }
                 //RTI
                 0x40 => {
-                    todo!();
+                    self.rti();
                 }
                 //RTS
                 0x60 => {
-                    todo!();
+                    self.rts();
                 }
                 //SBC
                 0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 => {
-                    todo!();
+                    self.sbc(opcode.get_addressing_mode());
                 }
                 //SEC
                 0x38 => {
-                    todo!();
+                    self.sec();
                 }
                 //SED
                 0xf8 => {
-                    todo!();
+                    self.sed();
                 }
                 //SEI
                 0x78 => {
-                    todo!();
+                    self.sei();
                 }
                 //STA
                 0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => {
@@ -383,11 +374,11 @@ impl CPU {
                 }
                 //STX
                 0x86 | 0x96 | 0x8e => {
-                    todo!();
+                    self.stx(opcode.get_addressing_mode());
                 }
                 //STY
                 0x84 | 0x94 | 0x8c => {
-                    todo!();
+                    self.sty(opcode.get_addressing_mode());
                 }
                 //TAX
                 0xaa => {
@@ -395,23 +386,23 @@ impl CPU {
                 }
                 //TAY
                 0xa8 => {
-                    todo!();
+                    self.tay();
                 }
                 //TSX
                 0xba => {
-                    todo!();
+                    self.tsx();
                 }
                 //TXA
                 0x8a => {
-                    todo!();
+                    self.txa();
                 }
                 //TXS
                 0x9a => {
-                    todo!();
+                    self.txs();
                 }
                 //TYA
                 0x98 => {
-                    todo!();
+                    self.tya();
                 }
                 _ => {
                     panic!("opcode {:X} not found", opcode.get_code());
@@ -437,7 +428,7 @@ impl CPU {
         let out_shifted_bit: u8;
         match addressing_mode {
             AddressingMode::Accumulator => {
-                out_shifted_bit = self.accumulator >> 7;//FIXME: READ THE ASL MANUAL
+                out_shifted_bit = self.accumulator >> 7; //FIXME: READ THE ASL MANUAL
                 self.accumulator <<= 1;
                 self.update_zero_and_negative_flag(self.accumulator);
             }
@@ -495,90 +486,119 @@ impl CPU {
             self.program_counter = new_program_counter_address;
         }
     }
-    fn brk(&mut self, addressing_mode: &AddressingMode) {
+    fn brk(&mut self, _addressing_mode: &AddressingMode) {
         self.push_2_byte_to_stack(self.program_counter);
         self.push_byte_to_stack(self.status);
-        self.program_counter = self.memory_read_2_byte(INTEERRUPT_VECTOR_MEMEROY_ADDRESS);
+        //FIXMEself.program_counter = self.memory_read_2_byte(INTEERRUPT_VECTOR_MEMEROY_ADDRESS);
         self.set_brake_flag_to(0x1);
     }
-    fn bvc (&mut self, addressing_mode: &AddressingMode) {
+    fn bvc(&mut self, addressing_mode: &AddressingMode) {
         if !self.is_overflow_flag_set() {
             let new_program_counter_address = self.get_address_from(addressing_mode);
             self.program_counter = new_program_counter_address;
         }
     }
-    fn bvs (&mut self, addressing_mode: &AddressingMode) {
+    fn bvs(&mut self, addressing_mode: &AddressingMode) {
         if self.is_overflow_flag_set() {
             let new_program_counter_address = self.get_address_from(addressing_mode);
             self.program_counter = new_program_counter_address;
         }
     }
-    fn clc (&mut self, addressing_mode: &AddressingMode) {
+    fn clc(&mut self, _addressing_mode: &AddressingMode) {
         self.set_carry_flag_to(0x0);
     }
-    fn cld (&mut self, addressing_mode: &AddressingMode) {
+    fn cld(&mut self, _addressing_mode: &AddressingMode) {
         self.set_decimal_flag_to(0x0);
     }
-    fn cli (&mut self, addressing_mode: &AddressingMode) {
+    fn cli(&mut self, _addressing_mode: &AddressingMode) {
         self.set_interrupt_disable_flag_to(0x0);
     }
-    fn clv (&mut self, addressing_mode: &AddressingMode) {
+    fn clv(&mut self, _addressing_mode: &AddressingMode) {
         self.set_overflow_flag_to(0x0);
     }
-    fn cmp (&mut self, addressing_mode: &AddressingMode){
+    fn cmp(&mut self, addressing_mode: &AddressingMode) {
         let memory_value = self.memory_read_byte(self.get_address_from(addressing_mode));
         let result = self.accumulator - memory_value;
-        if self.accumulator >= memory_value{
+        if self.accumulator >= memory_value {
             self.set_carry_flag_to(0x1)
-        }
-        else if self.accumulator == memory_value {
+        } else if self.accumulator == memory_value {
             self.set_zero_flag_to(0x1);
         }
-        if self.is_negativ_bit_present(result){
+        if self.is_negativ_bit_present(result) {
             self.set_negative_flag_to(0x1)
         }
     }
-    fn cpx (&mut self, addressing_mode: &AddressingMode){
+    fn cpx(&mut self, addressing_mode: &AddressingMode) {
         let memory_value = self.memory_read_byte(self.get_address_from(addressing_mode));
         let result = self.register_x - memory_value;
-        if self.register_x >= memory_value{
+        if self.register_x >= memory_value {
             self.set_carry_flag_to(0x1)
-        }
-        else if self.register_x == memory_value {
+        } else if self.register_x == memory_value {
             self.set_zero_flag_to(0x1);
         }
-        if self.is_negativ_bit_present(result){
+        if self.is_negativ_bit_present(result) {
             self.set_negative_flag_to(0x1)
         }
     }
-    fn cpy (&mut self, addressing_mode: &AddressingMode){
+    fn cpy(&mut self, addressing_mode: &AddressingMode) {
         let memory_value = self.memory_read_byte(self.get_address_from(addressing_mode));
         let result = self.register_y - memory_value;
-        if self.register_y >= memory_value{
+        if self.register_y >= memory_value {
             self.set_carry_flag_to(0x1)
-        }
-        else if self.register_y == memory_value {
+        } else if self.register_y == memory_value {
             self.set_zero_flag_to(0x1);
         }
-        if self.is_negativ_bit_present(result){
+        if self.is_negativ_bit_present(result) {
             self.set_negative_flag_to(0x1)
         }
     }
-    fn dec (&mut self, addressing_mode: &AddressingMode){
+    fn dec(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_address_from(addressing_mode);
         let memory_value = self.memory_read_byte(address);
         self.memory_write_byte(address, memory_value.wrapping_sub(1));
         self.update_zero_and_negative_flag(memory_value.wrapping_sub(1));
     }
-    fn dex (&mut self, _addressing_mode: &AddressingMode){
+    fn dex(&mut self, _addressing_mode: &AddressingMode) {
         self.register_x = self.register_x.wrapping_sub(1);
         self.update_zero_and_negative_flag(self.register_x);
     }
-    fn dey (&mut self, _addressing_mode: &AddressingMode){
+    fn dey(&mut self, _addressing_mode: &AddressingMode) {
         self.register_y = self.register_y.wrapping_sub(1);
         self.update_zero_and_negative_flag(self.register_y);
     }
-    
+
+    fn eor(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
+        self.accumulator ^= memory_value;
+        self.update_zero_and_negative_flag(self.accumulator);
+    }
+
+    fn inc(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address).wrapping_add(1);
+        self.memory_write_byte(address, memory_value);
+        self.update_zero_and_negative_flag(memory_value);
+    }
+
+    fn inx(&mut self) {
+        self.register_x = self.register_x.wrapping_add(1);
+        self.update_zero_and_negative_flag(self.register_x);
+    }
+    fn iny(&mut self) {
+        self.register_y = self.register_y.wrapping_add(1);
+        self.update_zero_and_negative_flag(self.register_y);
+    }
+    fn jmp(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
+        let new_address = self.memory_read_2_byte(address);
+        self.program_counter = new_address;
+    }
+    fn jsr(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
+        let new_address = self.memory_read_2_byte(address);
+        self.program_counter = new_address;
+    }
 
     fn lda(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_address_from(addressing_mode);
@@ -587,26 +607,187 @@ impl CPU {
         self.accumulator = value;
         self.update_zero_and_negative_flag(self.accumulator);
     }
+    fn ldx(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
+        self.register_x = memory_value;
+        self.update_zero_and_negative_flag(self.register_x);
+    }
+    fn ldy(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
+        self.register_y = memory_value;
+        self.update_zero_and_negative_flag(self.register_y);
+    }
+    fn lsr(&mut self, addressing_mode: &AddressingMode) {
+        let out_shifted_bit: u8;
+        match addressing_mode {
+            AddressingMode::Accumulator => {
+                out_shifted_bit = self.accumulator << 7;
+                self.accumulator >>= 1;
+                self.set_carry_flag_to(out_shifted_bit);
+                self.update_zero_and_negative_flag(self.accumulator);
+            }
+            _ => {
+                let address = self.get_address_from(addressing_mode);
+                let mut memory_value = self.memory_read_byte(address);
+                out_shifted_bit = memory_value << 7;
+                memory_value >>= 1;
+                self.memory_write_byte(address, memory_value);
+                self.set_carry_flag_to(out_shifted_bit);
+                self.update_zero_and_negative_flag(memory_value);
+            }
+        }
+    }
+    fn nop(&self) {
+        let dont_do_anything: u8;
+    }
+    fn ora(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
+        self.accumulator |= memory_value;
+        self.update_zero_and_negative_flag(self.accumulator);
+    }
+    fn pha(&mut self) {
+        self.push_byte_to_stack(self.accumulator);
+    }
+    fn php(&mut self) {
+        self.push_byte_to_stack(self.status);
+    }
+    fn pla(&mut self) {
+        self.accumulator = self.pop_byte_from_stack();
+        self.update_zero_and_negative_flag(self.accumulator);
+    }
+    fn plp(&mut self) {
+        self.status = self.pop_byte_from_stack();
+    }
+    fn rol(&mut self, addressing_mode: &AddressingMode) {
+        
+        match addressing_mode {
+            AddressingMode::Accumulator => {
+                let outshifted_bit = self.accumulator >> 7;
+                self.accumulator <<= 1;
+                if self.is_carry_flag_set(){
+                    self.accumulator |= CARRY_FLAG;
+                }
+                self.set_carry_flag_to(outshifted_bit);
+                self.update_zero_and_negative_flag(self.accumulator);
+            }
+            _ => {
+                let address = self.get_address_from(addressing_mode);
+                let mut memory_value = self.memory_read_byte(address);
+                let outshifted_bit = memory_value >> 7;
+                memory_value <<= 1;
+                if self.is_carry_flag_set()  {
+                    memory_value |= CARRY_FLAG;
+                } 
+                self.memory_write_byte(address, memory_value);
+                self.set_carry_flag_to(outshifted_bit);
+                self.set_negative_flag_to(memory_value >>7);
 
+                
+            }
+        }
+    }
+    fn ror(&mut self, addressing_mode: &AddressingMode) {
+        
+        match addressing_mode {
+            AddressingMode::Accumulator => {
+                let outshifted_bit = self.accumulator << 7;
+                self.accumulator >>= 1;
+                if self.is_carry_flag_set(){
+                    self.accumulator |= CARRY_FLAG;
+                }
+                self.set_carry_flag_to(outshifted_bit);
+                self.update_zero_and_negative_flag(self.accumulator);
+            }
+            _ => {
+                let address = self.get_address_from(addressing_mode);
+                let mut memory_value = self.memory_read_byte(address);
+                let outshifted_bit = memory_value << 7;
+                memory_value >>= 1;
+                if self.is_carry_flag_set()  {
+                    memory_value |= CARRY_FLAG;
+                } 
+                self.memory_write_byte(address, memory_value);
+                self.set_carry_flag_to(outshifted_bit);
+                self.set_negative_flag_to(memory_value >> 7);
+
+                
+            }
+        }
+    }
+    fn rti(&mut self){
+        self.status = self.pop_byte_from_stack();
+        self.program_counter = self.pop_2_byte_from_stack();
+    }
+    fn rts(&mut self){
+        self.program_counter = self.pop_2_byte_from_stack() -1 ;
+    }
+    fn sbc(&mut self, addressing_mode: &AddressingMode){
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
+        if self.is_carry_flag_set(){
+            self.accumulator = self.accumulator.wrapping_sub(memory_value.wrapping_sub(!CARRY_FLAG));
+        }
+        else {
+            self.accumulator = self.accumulator.wrapping_sub(memory_value.wrapping_sub(!0));
+        }
+        
+        //TODO: TAKE A LOOK LATER ON (I DONT FIGURED OUT HOW IT WORKS FOR NOW)
+    }
+    fn sec(&mut self){
+        self.set_carry_flag_to(1);
+    }
+    fn sed(&mut self){
+        self.set_decimal_flag_to(1);
+    }
+    fn sei(&mut self){
+        self.set_interrupt_disable_flag_to(1);
+    }
     fn sta(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_address_from(addressing_mode);
         self.memory_write_byte(address, self.accumulator);
     }
-
-     fn tax(&mut self) {
+    fn stx(&mut self, addressing_mode: &AddressingMode){
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
+        self.register_x = memory_value;
+    }
+    fn sty(&mut self, addressing_mode: &AddressingMode){
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
+        self.register_y = memory_value;
+    }
+    fn tax(&mut self) {
         self.register_x = self.accumulator;
         self.update_zero_and_negative_flag(self.register_x);
     }
-
-    fn inx(&mut self) {
-        self.register_x = self.register_x.wrapping_add(1);
+    fn tay(&mut self){
+        self.register_y = self.accumulator;
+        self.update_zero_and_negative_flag(self.register_y);
+    }
+    fn tsx(&mut self){
+        self.register_x = self.stack_pointer;
         self.update_zero_and_negative_flag(self.register_x);
     }
+    fn txa(&mut self){
+        self.accumulator = self.register_x;
+        self.update_zero_and_negative_flag(self.accumulator);
+    }
+    fn txs(&mut self){
+        self.stack_pointer = self.register_x;
+    }
+    fn tya(&mut self){
+        self.accumulator = self.register_y;
+        self.update_zero_and_negative_flag(self.accumulator);
+    }
+    
 
     fn update_zero_and_negative_flag(&mut self, byte_to_check: u8) {
         self.set_zero_flag_to((byte_to_check == ZERO_RESULT) as u8);
 
-        self.set_negative_flag_to(self.is_negativ_bit_present(byte_to_check ) as u8);
+        self.set_negative_flag_to(self.is_negativ_bit_present(byte_to_check) as u8);
     }
 
     fn set_zero_flag_to(&mut self, zero_bit: u8) {
@@ -638,7 +819,7 @@ impl CPU {
             self.status &= !NEGATIVE_FLAG;
         }
     }
-    
+
     fn set_brake_flag_to(&mut self, break_bit: u8) {
         if break_bit == 1 {
             self.status |= BREAK_FLAG;
@@ -646,20 +827,20 @@ impl CPU {
             self.status &= !BREAK_FLAG;
         }
     }
-    
-    fn set_decimal_flag_to(&mut self, decimal_bit: u8)  {
+
+    fn set_decimal_flag_to(&mut self, decimal_bit: u8) {
         if decimal_bit == 1 {
             self.status |= DECIMAL_FLAG;
         } else {
             self.status &= !DECIMAL_FLAG;
         }
     }
-    
+
     fn is_overflow_flag_set(&self) -> bool {
         let overflow_bit = (self.status << 1) >> 7;
         overflow_bit == 1
     }
-    
+
     fn set_interrupt_disable_flag_to(&mut self, interrupt_disable_bit: u8) {
         if interrupt_disable_bit == 1 {
             self.status |= INTERRUPT_DISABLE_FLAG;
@@ -667,11 +848,11 @@ impl CPU {
             self.status &= !INTERRUPT_DISABLE_FLAG;
         }
     }
-    
+
     fn is_negativ_bit_present(&self, byte_to_check: u8) -> bool {
         byte_to_check >> 7 == 1
     }
-    fn is_zero_flag_present(&self, byte_to_check: u8) -> bool{
+    fn is_zero_flag_present(&self, byte_to_check: u8) -> bool {
         (byte_to_check >> 1) << 7 == 1
     }
     fn is_carry_flag_set(&self) -> bool {
@@ -693,4 +874,3 @@ impl Default for CPU {
         Self::new()
     }
 }
-
