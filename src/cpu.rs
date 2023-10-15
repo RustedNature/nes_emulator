@@ -156,7 +156,7 @@ impl CPU {
                 let deref_base = ((hi as u16) << 8) | (lo as u16);
                 deref_base.wrapping_add(self.register_y as u16)
             }
-            
+
             AddressingMode::Relative => {
                 let offset = self.memory_read_byte(self.program_counter);
                 if self.is_negativ_bit_present(offset) {
@@ -165,8 +165,8 @@ impl CPU {
                     self.program_counter + (offset & 0b0111_1111) as u16
                 }
             }
-            
-            AddressingMode::Indirect => self.memory_read_2_byte(self.program_counter), 
+
+            AddressingMode::Indirect => self.memory_read_2_byte(self.program_counter),
             _ => {
                 panic!("mode {:?} is not supported", mode);
             }
@@ -225,7 +225,7 @@ impl CPU {
                 }
                 //BRK
                 0x00 => {
-                    //FIXME//self.brk(opcode.get_addressing_mode());
+                    //FIXME: self.brk(opcode.get_addressing_mode());
                     break;
                 }
                 //BVC
@@ -662,12 +662,11 @@ impl CPU {
         self.status = self.pop_byte_from_stack();
     }
     fn rol(&mut self, addressing_mode: &AddressingMode) {
-        
         match addressing_mode {
             AddressingMode::Accumulator => {
                 let outshifted_bit = self.accumulator >> 7;
                 self.accumulator <<= 1;
-                if self.is_carry_flag_set(){
+                if self.is_carry_flag_set() {
                     self.accumulator |= CARRY_FLAG;
                 }
                 self.set_carry_flag_to(outshifted_bit);
@@ -678,24 +677,21 @@ impl CPU {
                 let mut memory_value = self.memory_read_byte(address);
                 let outshifted_bit = memory_value >> 7;
                 memory_value <<= 1;
-                if self.is_carry_flag_set()  {
+                if self.is_carry_flag_set() {
                     memory_value |= CARRY_FLAG;
-                } 
+                }
                 self.memory_write_byte(address, memory_value);
                 self.set_carry_flag_to(outshifted_bit);
-                self.set_negative_flag_to(memory_value >>7);
-
-                
+                self.set_negative_flag_to(memory_value >> 7);
             }
         }
     }
     fn ror(&mut self, addressing_mode: &AddressingMode) {
-        
         match addressing_mode {
             AddressingMode::Accumulator => {
                 let outshifted_bit = self.accumulator << 7;
                 self.accumulator >>= 1;
-                if self.is_carry_flag_set(){
+                if self.is_carry_flag_set() {
                     self.accumulator |= CARRY_FLAG;
                 }
                 self.set_carry_flag_to(outshifted_bit);
@@ -706,55 +702,54 @@ impl CPU {
                 let mut memory_value = self.memory_read_byte(address);
                 let outshifted_bit = memory_value << 7;
                 memory_value >>= 1;
-                if self.is_carry_flag_set()  {
+                if self.is_carry_flag_set() {
                     memory_value |= CARRY_FLAG;
-                } 
+                }
                 self.memory_write_byte(address, memory_value);
                 self.set_carry_flag_to(outshifted_bit);
                 self.set_negative_flag_to(memory_value >> 7);
-
-                
             }
         }
     }
-    fn rti(&mut self){
+    fn rti(&mut self) {
         self.status = self.pop_byte_from_stack();
         self.program_counter = self.pop_2_byte_from_stack();
     }
-    fn rts(&mut self){
-        self.program_counter = self.pop_2_byte_from_stack() -1 ;
+    fn rts(&mut self) {
+        self.program_counter = self.pop_2_byte_from_stack() - 1;
     }
-    fn sbc(&mut self, addressing_mode: &AddressingMode){
+    fn sbc(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_address_from(addressing_mode);
         let memory_value = self.memory_read_byte(address);
-        if self.is_carry_flag_set(){
-            self.accumulator = self.accumulator.wrapping_sub(memory_value.wrapping_sub(!CARRY_FLAG));
-        }
-        else {
+        if self.is_carry_flag_set() {
+            self.accumulator = self
+                .accumulator
+                .wrapping_sub(memory_value.wrapping_sub(!CARRY_FLAG));
+        } else {
             self.accumulator = self.accumulator.wrapping_sub(memory_value.wrapping_sub(!0));
         }
-        
+
         //TODO: TAKE A LOOK LATER ON (I DONT FIGURED OUT HOW IT WORKS FOR NOW)
     }
-    fn sec(&mut self){
+    fn sec(&mut self) {
         self.set_carry_flag_to(1);
     }
-    fn sed(&mut self){
+    fn sed(&mut self) {
         self.set_decimal_flag_to(1);
     }
-    fn sei(&mut self){
+    fn sei(&mut self) {
         self.set_interrupt_disable_flag_to(1);
     }
     fn sta(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_address_from(addressing_mode);
         self.memory_write_byte(address, self.accumulator);
     }
-    fn stx(&mut self, addressing_mode: &AddressingMode){
+    fn stx(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_address_from(addressing_mode);
         let memory_value = self.memory_read_byte(address);
         self.register_x = memory_value;
     }
-    fn sty(&mut self, addressing_mode: &AddressingMode){
+    fn sty(&mut self, addressing_mode: &AddressingMode) {
         let address = self.get_address_from(addressing_mode);
         let memory_value = self.memory_read_byte(address);
         self.register_y = memory_value;
@@ -763,26 +758,25 @@ impl CPU {
         self.register_x = self.accumulator;
         self.update_zero_and_negative_flag(self.register_x);
     }
-    fn tay(&mut self){
+    fn tay(&mut self) {
         self.register_y = self.accumulator;
         self.update_zero_and_negative_flag(self.register_y);
     }
-    fn tsx(&mut self){
+    fn tsx(&mut self) {
         self.register_x = self.stack_pointer;
         self.update_zero_and_negative_flag(self.register_x);
     }
-    fn txa(&mut self){
+    fn txa(&mut self) {
         self.accumulator = self.register_x;
         self.update_zero_and_negative_flag(self.accumulator);
     }
-    fn txs(&mut self){
+    fn txs(&mut self) {
         self.stack_pointer = self.register_x;
     }
-    fn tya(&mut self){
+    fn tya(&mut self) {
         self.accumulator = self.register_y;
         self.update_zero_and_negative_flag(self.accumulator);
     }
-    
 
     fn update_zero_and_negative_flag(&mut self, byte_to_check: u8) {
         self.set_zero_flag_to((byte_to_check == ZERO_RESULT) as u8);
