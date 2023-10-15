@@ -17,7 +17,7 @@ fn test_0xa9_lda_zero_flag() {
 #[test]
 fn test_0xa5_lda_zero_page() {
     let mut cpu = CPU::new();
-    cpu.mem_write(0x10, 0x55);
+    cpu.memory_write_byte(0x10, 0x55);
 
     cpu.load_and_run(vec![0xa5, 0x10, 0x00]);
 

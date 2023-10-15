@@ -5,5 +5,7 @@ pub mod test;
 #[macro_use]
 extern crate lazy_static;
 fn main() {
-    println!("Hello, world!");
+    let cpu = cpu::CPU::default();
+
+    //cpu.load_and_run(program.load());
 }
