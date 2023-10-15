@@ -5,12 +5,13 @@ const NEGATIVE_RESULT: u8 = 0b1000_0000;
 const STACK_START: u16 = 0x0100;
 const STACK_END: u16 = 0x01ff;
 const STACK_POINTER_START: u8 = 0xff;
+const INTEERRUPT_VECTOR_MEMEROY_ADDRESS: u16 = 0xfffe;
 
 pub const CARRY_FLAG: u8 = 0b0000_0001;
 pub const ZERO_FLAG: u8 = 0b0000_0010;
 pub const INTERRUPT_DISABLE_FLAG: u8 = 0b0000_0100;
 pub const DECIMAL_FLAG: u8 = 0b0000_1000; //not used in NES
-pub const B_FLAG: u8 = 0b0001_0000;
+pub const BREAK_FLAG: u8 = 0b0001_0000;
 pub const ALWAYS_1_FLAG: u8 = 0b0010_0000; //always 1
 pub const OVERFLOW_FLAG: u8 = 0b0100_0000;
 pub const NEGATIVE_FLAG: u8 = 0b1000_0000;
@@ -88,9 +89,20 @@ impl CPU {
         self.memory_write_byte(STACK_START + self.stack_pointer as u16, data);
         self.stack_pointer -= 1;
     }
+    fn push_2_byte_to_stack(&mut self, data: u16){
+        let hi = (data >> 8) as u8;
+        let low = (data & 0xff) as u8;
+        self.push_byte_to_stack(hi);
+        self.push_byte_to_stack(low);
+    }
     fn pop_byte_from_stack(&mut self) -> u8{
         self.stack_pointer += 1;
         self.memory_read_byte(STACK_START + self.stack_pointer as u16)
+    }
+    fn pop_2_byte_from_stack(&mut self) -> u16{
+        let low = self.pop_byte_from_stack();
+        let hi = self.pop_byte_from_stack();
+        ((hi as u16) << 8) | (low as u16)
     }
     pub fn load_and_run(&mut self, program: Vec<u8>) {
         self.load(program);
@@ -98,7 +110,7 @@ impl CPU {
         self.run();
     }
 
-    pub(crate) fn get_address_for(&self, mode: &AddressingMode) -> u16 {
+     fn get_address_from(&self, mode: &AddressingMode) -> u16 {
         match mode {
             AddressingMode::Immediate => self.program_counter,
 
@@ -149,7 +161,7 @@ impl CPU {
             }
             AddressingMode::Relative => {
                 let offset = self.memory_read_byte(self.program_counter);
-                if self.if_relative_offset_negative(offset) {
+                if self.is_negativ_bit_present(offset) {
                     self.program_counter - (offset & 0b0111_1111) as u16
                 } else {
                     self.program_counter + (offset & 0b0111_1111) as u16
@@ -207,67 +219,67 @@ impl CPU {
                 0x24 | 0x2c => self.bit(opcode.get_addressing_mode()),
                 //BMI
                 0x30 => {
-                    todo!();
+                    self.bmi(opcode.get_addressing_mode())
                 }
                 //BNE
                 0xd0 => {
-                    todo!();
+                    self.bne(opcode.get_addressing_mode());
                 }
                 //BPL
                 0x10 => {
-                    todo!();
+                    self.bpl(opcode.get_addressing_mode());
                 }
                 //BRK
                 0x00 => {
-                    break;
+                    self.brk(opcode.get_addressing_mode());
                 }
                 //BVC
                 0x50 => {
-                    todo!();
+                    self.bvc(opcode.get_addressing_mode());
                 }
                 //BVS
                 0x70 => {
-                    todo!();
+                    self.bvs(opcode.get_addressing_mode());
                 }
                 //CLC
                 0x18 => {
-                    todo!();
+                    self.clc(opcode.get_addressing_mode());
                 }
                 //CLD
                 0xd8 => {
-                    todo!();
+                    self.cld(opcode.get_addressing_mode());
                 }
                 //CLI
                 0x58 => {
-                    todo!();
+                    self.cli(opcode.get_addressing_mode());
                 }
                 //CLV
                 0xb8 => {
-                    todo!();
+                    self.clv(opcode.get_addressing_mode());
                 }
                 //CMP
                 0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {
-                    todo!();
+                    self.cmp(opcode.get_addressing_mode());
                 }
                 //CPX
                 0xe0 | 0xe4 | 0xec => {
-                    todo!();
+                    self.cpx(opcode.get_addressing_mode())
                 }
                 //CPY
                 0xc0 | 0xc4 | 0xcc => {
-                    todo!();
+                    self.cpy(opcode.get_addressing_mode())
                 }
                 //DEC
                 0xc6 | 0xd6 | 0xce | 0xde => {
-                    todo!();
+                    self.dec(opcode.get_addressing_mode());
                 }
                 //DEX
                 0xca => {
-                    todo!();
+                    self.dex(opcode.get_addressing_mode());
                 }
                 //DEY
                 0x88 => {
-                    todo!();
+                    self.dey(opcode.get_addressing_mode());
                 }
                 //EOR
                 0x49 | 0x45 | 0x55 | 0x4d | 0x5d | 0x59 | 0x41 | 0x51 => {
@@ -410,7 +422,7 @@ impl CPU {
     }
 
     pub fn adc(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.get_address_for(addressing_mode);
+        let address = self.get_address_from(addressing_mode);
         let memory_value = self.memory_read_byte(address);
 
         self.accumulator += memory_value;
@@ -418,19 +430,19 @@ impl CPU {
     } //TODO: CARRY BIT
 
     fn and(&mut self, addressing_mode: &AddressingMode) {
-        self.accumulator &= self.memory_read_byte(self.get_address_for(addressing_mode));
+        self.accumulator &= self.memory_read_byte(self.get_address_from(addressing_mode));
         self.update_zero_and_negative_flag(self.accumulator);
     }
     fn asl(&mut self, addressing_mode: &AddressingMode) {
         let out_shifted_bit: u8;
         match addressing_mode {
             AddressingMode::Accumulator => {
-                out_shifted_bit = self.accumulator >> 7;
+                out_shifted_bit = self.accumulator >> 7;//FIXME: READ THE ASL MANUAL
                 self.accumulator <<= 1;
                 self.update_zero_and_negative_flag(self.accumulator);
             }
             _ => {
-                let address = self.get_address_for(addressing_mode);
+                let address = self.get_address_from(addressing_mode);
                 let mut memory_content = self.memory_read_byte(address);
                 out_shifted_bit = memory_content >> 7;
                 memory_content <<= 1;
@@ -443,23 +455,23 @@ impl CPU {
     //TODO: TEST FROM HERE
     fn bcc(&mut self, addressing_mode: &AddressingMode) {
         if !self.is_carry_flag_set() {
-            self.program_counter = self.get_address_for(addressing_mode);
+            self.program_counter = self.get_address_from(addressing_mode);
         }
     }
     fn bcs(&mut self, addressing_mode: &AddressingMode) {
         if self.is_carry_flag_set() {
-            self.program_counter = self.get_address_for(addressing_mode);
+            self.program_counter = self.get_address_from(addressing_mode);
         }
     }
     fn beq(&mut self, addressing_mode: &AddressingMode) {
         if self.is_zero_flag_set() {
-            self.program_counter = self.get_address_for(addressing_mode);
+            self.program_counter = self.get_address_from(addressing_mode);
         }
     }
     fn bit(&mut self, addressing_mode: &AddressingMode) {
-        let memory_value = self.memory_read_byte(self.get_address_for(addressing_mode));
+        let memory_value = self.memory_read_byte(self.get_address_from(addressing_mode));
         let and_result = self.accumulator & memory_value;
-        self.update_zero_flag(and_result);
+        self.set_zero_flag_to(and_result);
         let overflow_flag_from_memory = (memory_value << 1) >> 7;
         let negative_flag_from_memory = memory_value >> 7;
         self.set_negative_flag_to(negative_flag_from_memory);
@@ -467,87 +479,145 @@ impl CPU {
     }
     fn bmi(&mut self, addressing_mode: &AddressingMode) {
         if self.is_negative_flag_set() {
-            let new_program_counter_address = self.get_address_for(addressing_mode);
+            let new_program_counter_address = self.get_address_from(addressing_mode);
             self.program_counter = new_program_counter_address;
         }
     }
     fn bne(&mut self, addressing_mode: &AddressingMode) {
         if !self.is_zero_flag_set() {
-            let new_program_counter_address = self.get_address_for(addressing_mode);
+            let new_program_counter_address = self.get_address_from(addressing_mode);
             self.program_counter = new_program_counter_address;
         }
     }
     fn bpl(&mut self, addressing_mode: &AddressingMode) {
         if !self.is_negative_flag_set() {
-            let new_program_counter_address = self.get_address_for(addressing_mode);
+            let new_program_counter_address = self.get_address_from(addressing_mode);
             self.program_counter = new_program_counter_address;
         }
     }
     fn brk(&mut self, addressing_mode: &AddressingMode) {
-        todo!();
+        self.push_2_byte_to_stack(self.program_counter);
+        self.push_byte_to_stack(self.status);
+        self.program_counter = self.memory_read_2_byte(INTEERRUPT_VECTOR_MEMEROY_ADDRESS);
+        self.set_brake_flag_to(0x1);
     }
+    fn bvc (&mut self, addressing_mode: &AddressingMode) {
+        if !self.is_overflow_flag_set() {
+            let new_program_counter_address = self.get_address_from(addressing_mode);
+            self.program_counter = new_program_counter_address;
+        }
+    }
+    fn bvs (&mut self, addressing_mode: &AddressingMode) {
+        if self.is_overflow_flag_set() {
+            let new_program_counter_address = self.get_address_from(addressing_mode);
+            self.program_counter = new_program_counter_address;
+        }
+    }
+    fn clc (&mut self, addressing_mode: &AddressingMode) {
+        self.set_carry_flag_to(0x0);
+    }
+    fn cld (&mut self, addressing_mode: &AddressingMode) {
+        self.set_decimal_flag_to(0x0);
+    }
+    fn cli (&mut self, addressing_mode: &AddressingMode) {
+        self.set_interrupt_disable_flag_to(0x0);
+    }
+    fn clv (&mut self, addressing_mode: &AddressingMode) {
+        self.set_overflow_flag_to(0x0);
+    }
+    fn cmp (&mut self, addressing_mode: &AddressingMode){
+        let memory_value = self.memory_read_byte(self.get_address_from(addressing_mode));
+        let result = self.accumulator - memory_value;
+        if self.accumulator >= memory_value{
+            self.set_carry_flag_to(0x1)
+        }
+        else if self.accumulator == memory_value {
+            self.set_zero_flag_to(0x1);
+        }
+        if self.is_negativ_bit_present(result){
+            self.set_negative_flag_to(0x1)
+        }
+    }
+    fn cpx (&mut self, addressing_mode: &AddressingMode){
+        let memory_value = self.memory_read_byte(self.get_address_from(addressing_mode));
+        let result = self.register_x - memory_value;
+        if self.register_x >= memory_value{
+            self.set_carry_flag_to(0x1)
+        }
+        else if self.register_x == memory_value {
+            self.set_zero_flag_to(0x1);
+        }
+        if self.is_negativ_bit_present(result){
+            self.set_negative_flag_to(0x1)
+        }
+    }
+    fn cpy (&mut self, addressing_mode: &AddressingMode){
+        let memory_value = self.memory_read_byte(self.get_address_from(addressing_mode));
+        let result = self.register_y - memory_value;
+        if self.register_y >= memory_value{
+            self.set_carry_flag_to(0x1)
+        }
+        else if self.register_y == memory_value {
+            self.set_zero_flag_to(0x1);
+        }
+        if self.is_negativ_bit_present(result){
+            self.set_negative_flag_to(0x1)
+        }
+    }
+    fn dec (&mut self, addressing_mode: &AddressingMode){
+        let address = self.get_address_from(addressing_mode);
+        let memory_value = self.memory_read_byte(address);
+        self.memory_write_byte(address, memory_value.wrapping_sub(1));
+        self.update_zero_and_negative_flag(memory_value.wrapping_sub(1));
+    }
+    fn dex (&mut self, _addressing_mode: &AddressingMode){
+        self.register_x = self.register_x.wrapping_sub(1);
+        self.update_zero_and_negative_flag(self.register_x);
+    }
+    fn dey (&mut self, _addressing_mode: &AddressingMode){
+        self.register_y = self.register_y.wrapping_sub(1);
+        self.update_zero_and_negative_flag(self.register_y);
+    }
+    
 
-    pub(crate) fn lda(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.get_address_for(addressing_mode);
+    fn lda(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
         let value = self.memory_read_byte(address);
 
         self.accumulator = value;
         self.update_zero_and_negative_flag(self.accumulator);
     }
 
-    pub(crate) fn sta(&mut self, addressing_mode: &AddressingMode) {
-        let address = self.get_address_for(addressing_mode);
+    fn sta(&mut self, addressing_mode: &AddressingMode) {
+        let address = self.get_address_from(addressing_mode);
         self.memory_write_byte(address, self.accumulator);
     }
 
-    pub(crate) fn tax(&mut self) {
+     fn tax(&mut self) {
         self.register_x = self.accumulator;
         self.update_zero_and_negative_flag(self.register_x);
     }
 
-    pub(crate) fn inx(&mut self) {
+    fn inx(&mut self) {
         self.register_x = self.register_x.wrapping_add(1);
         self.update_zero_and_negative_flag(self.register_x);
     }
 
-    pub(crate) fn update_zero_and_negative_flag(&mut self, result_of_last_operation: u8) {
-        self.update_zero_flag(result_of_last_operation);
+    fn update_zero_and_negative_flag(&mut self, byte_to_check: u8) {
+        self.set_zero_flag_to((byte_to_check == ZERO_RESULT) as u8);
 
-        self.update_negative_flag(result_of_last_operation);
+        self.set_negative_flag_to(self.is_negativ_bit_present(byte_to_check ) as u8);
     }
 
-    fn update_negative_flag(&mut self, byte_to_check: u8) {
-        if (byte_to_check & NEGATIVE_RESULT) != 0 {
-            self.set_negative_flag();
+    fn set_zero_flag_to(&mut self, zero_bit: u8) {
+        if zero_bit == 0x1 {
+            self.status |= ZERO_FLAG;
         } else {
-            self.reset_negative_flag();
+            self.status &= !ZERO_FLAG;
         }
     }
-
-    fn update_zero_flag(&mut self, byte_to_check: u8) {
-        if byte_to_check == ZERO_RESULT {
-            self.set_zero_flag();
-        } else {
-            self.reset_zero_flag();
-        }
-    }
-
-    fn set_negative_flag(&mut self) {
-        self.status |= NEGATIVE_FLAG;
-    }
-    fn reset_negative_flag(&mut self) {
-        self.status &= !NEGATIVE_FLAG;
-    }
-
-    fn set_zero_flag(&mut self) {
-        self.status |= ZERO_FLAG;
-    }
-    fn reset_zero_flag(&mut self) {
-        self.status &= !ZERO_FLAG;
-    }
-
-    fn set_carry_flag_to(&mut self, out_shifted_bit: u8) {
-        if out_shifted_bit == 0x1 {
+    fn set_carry_flag_to(&mut self, carry_bit: u8) {
+        if carry_bit == 0x1 {
             self.status |= CARRY_FLAG;
         } else {
             self.status &= !CARRY_FLAG;
@@ -561,12 +631,48 @@ impl CPU {
             self.status &= !OVERFLOW_FLAG;
         }
     }
-    fn set_negative_flag_to(&mut self, isolated_negative_bit: u8) {
-        if isolated_negative_bit == 0x1 {
+    fn set_negative_flag_to(&mut self, negative_bit: u8) {
+        if negative_bit == 0x1 {
             self.status |= NEGATIVE_FLAG;
         } else {
             self.status &= !NEGATIVE_FLAG;
         }
+    }
+    
+    fn set_brake_flag_to(&mut self, break_bit: u8) {
+        if break_bit == 1 {
+            self.status |= BREAK_FLAG;
+        } else {
+            self.status &= !BREAK_FLAG;
+        }
+    }
+    
+    fn set_decimal_flag_to(&mut self, decimal_bit: u8)  {
+        if decimal_bit == 1 {
+            self.status |= DECIMAL_FLAG;
+        } else {
+            self.status &= !DECIMAL_FLAG;
+        }
+    }
+    
+    fn is_overflow_flag_set(&self) -> bool {
+        let overflow_bit = (self.status << 1) >> 7;
+        overflow_bit == 1
+    }
+    
+    fn set_interrupt_disable_flag_to(&mut self, interrupt_disable_bit: u8) {
+        if interrupt_disable_bit == 1 {
+            self.status |= INTERRUPT_DISABLE_FLAG;
+        } else {
+            self.status &= !INTERRUPT_DISABLE_FLAG;
+        }
+    }
+    
+    fn is_negativ_bit_present(&self, byte_to_check: u8) -> bool {
+        byte_to_check >> 7 == 1
+    }
+    fn is_zero_flag_present(&self, byte_to_check: u8) -> bool{
+        (byte_to_check >> 1) << 7 == 1
     }
     fn is_carry_flag_set(&self) -> bool {
         let carry_bit = self.status << 7;
@@ -580,9 +686,6 @@ impl CPU {
         let negative_bit = self.status >> 7;
         negative_bit == 1
     }
-    fn if_relative_offset_negative(&self, offset: u8) -> bool {
-        offset >> 7 == 1
-    }
 }
 
 impl Default for CPU {
@@ -590,3 +693,4 @@ impl Default for CPU {
         Self::new()
     }
 }
+
