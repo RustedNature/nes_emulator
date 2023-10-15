@@ -418,7 +418,7 @@ impl CPU {
 
         self.accumulator += memory_value;
         self.update_zero_and_negative_flag(self.accumulator);
-    } //TODO: CARRY BIT poop
+    } //TODO: CARRY BIT
 
     fn and(&mut self, addressing_mode: &AddressingMode) {
         self.accumulator &= self.memory_read_byte(self.get_address_from(addressing_mode));
